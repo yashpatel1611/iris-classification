@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-epochs = 10000
-size_of_batches = 30
-learningRate = 0.0002
+epochs = 20000
+size_of_batches = 50
+learningRate = 0.000000003
 
 df = pd.read_csv('IRIS.csv')
 for i in range(20):
@@ -40,7 +40,7 @@ layer3_biases = np.random.random(size=(1, 1))
 
 
 def train_network(l1_w, l1_b, l2_w, l2_b, l3_w, l3_b, inputs, labels):
-    for _ in range(epochs):
+    for e in range(epochs):
         loop_cost = 0
         for i in range(len(inputs)):
             x = inputs[i]
@@ -51,19 +51,24 @@ def train_network(l1_w, l1_b, l2_w, l2_b, l3_w, l3_b, inputs, labels):
             loss = loss_function(prediction, y)
             loss_difference = prediction - y
 
-            l3_w = np.subtract(l3_w, learningRate * np.matmul(loss_difference, l2_o.T))
-            l3_b = np.subtract(l3_b, learningRate * loss)
+            l3_w_delta = loss_difference.dot(l2_o.T)
+            l2_w_delta = l2_o.dot(np.sum(l3_w.T.dot(l3_w_delta)))
+            l1_w_delta = l1_o.dot(np.sum(l2_w.T.dot(l2_w_delta)))
 
-            l2_w = np.subtract(l2_w, learningRate * np.matmul(l3_w.T, np.matmul(loss_difference, l1_o.T)))
-            l2_b = np.subtract(l2_b, learningRate * np.matmul(loss_difference, l2_o.T).T)
+            l3_w = np.subtract(l3_w, learningRate * l3_w_delta)
+            l3_b = np.subtract(l3_b, learningRate * np.sum(l3_w_delta))
 
-            l1_w = np.subtract(l1_w,
-                               learningRate * np.matmul(l2_w.T, np.matmul(np.matmul(x, loss_difference.T), l3_w).T))
-            l1_b = np.subtract(l1_b, learningRate * np.matmul(l2_w.T, np.matmul(loss_difference, l2_o.T).T))
+            l2_w = np.subtract(l2_w, learningRate * l2_w_delta.dot(l1_o.T))
+            l2_b = np.subtract(l2_b, learningRate * np.sum(l2_w_delta))
+
+            l1_w = np.subtract(l1_w, learningRate * l1_w_delta.dot(x.T))
+            l1_b = np.subtract(l1_b, learningRate * np.sum(l1_w_delta))
 
             loop_cost += loss
 
-        print(loop_cost)
+        if e % 500 == 0:
+            print(str(e) + ":", loop_cost)
+
     return l1_w, l1_b, l2_w, l2_b, l3_w, l3_b
 
 
@@ -79,13 +84,22 @@ def loss_function(prediction, label):
     return np.average(np.square(prediction - label).astype(np.float))
 
 
+input_values = input_values / (input_values.max() - input_values.min())
+
+size_of_batches = 15
+
+training_batch_size = 6
+
 input_values_batches = np.split(input_values, size_of_batches, axis=1)
-input_values_train = np.array(input_values_batches[0:2])
-input_values_test = np.array(input_values_batches[3:5])
+input_values_train = np.array(input_values_batches[0:training_batch_size])
+input_values_test = np.array(input_values_batches[training_batch_size:size_of_batches])
 
 labels_formatted_batches = np.split(labels_formatted, size_of_batches, axis=1)
-labels_formatted_train = np.array(labels_formatted_batches[0:2])
-labels_formatted_test = np.array(labels_formatted_batches[3:5])
+labels_formatted_train = np.array(labels_formatted_batches[0:training_batch_size])
+labels_formatted_test = np.array(labels_formatted_batches[training_batch_size:size_of_batches])
+
+learningRate = 0.000007
+epochs = 50000
 
 l1_w, l1_b, l2_w, l2_b, l3_w, l3_b = train_network(layer1_weights, layer1_biases, layer2_weights, layer2_biases,
                                                    layer3_weights, layer3_biases,
@@ -93,7 +107,17 @@ l1_w, l1_b, l2_w, l2_b, l3_w, l3_b = train_network(layer1_weights, layer1_biases
 
 # Testing data tested below
 print("Testing")
-output = np.around(
-    np.array(feed_forward(input_values_test, l1_w, l1_b, l2_w, l2_b, l3_w, l3_b)[2]).astype(np.double))
 
+output = np.array(feed_forward(input_values_test, l1_w, l1_b, l2_w, l2_b, l3_w, l3_b)[2]).astype(np.double)
 print(loss_function(labels_formatted_test, output))
+
+accuracy = 0
+
+
+for i in range(output.shape[0]):
+    for j in range(output.shape[1]):
+        for k in range(output.shape[2]):
+            if (output[i][j][k] - labels_formatted_test[i][j][k] < 0.2):
+                accuracy += 1
+
+print("Accuracy:", accuracy * 100 / output.size)
